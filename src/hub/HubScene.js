@@ -14,7 +14,7 @@ export class HubScene {
         id: 'nageex',
         title: 'Nageex RPG',
         subtitle: 'Phaser 3 • Adventure RPG',
-        url: 'https://phaser-nageex.vercel.app',
+        url: 'https://nageex.vercel.app/',
         color: '#4fc3f7',
         thumbnail: null
       },
@@ -22,7 +22,7 @@ export class HubScene {
         id: 'island-crisis-3d',
         title: 'Island Crisis 3D',
         subtitle: 'Three.js • Action Adventure',
-        url: 'https://island-crisis-three-js.vercel.app',
+        url: 'https://island-crisis.vercel.app/',
         color: '#81c784',
         thumbnail: null
       },
@@ -30,7 +30,7 @@ export class HubScene {
         id: 'island-crisis-2d',
         title: 'Island Crisis 2D',
         subtitle: 'Phaser 3 • Platformer',
-        url: 'https://phaser-island-crisis.vercel.app',
+        url: 'https://phaser-island-crisis.vercel.app/',
         color: '#ffb74d',
         thumbnail: null
       },
@@ -38,7 +38,7 @@ export class HubScene {
         id: 'thumb-game',
         title: 'Thumb Game',
         subtitle: 'Phaser 3 • Multiplayer',
-        url: 'https://thumb-game.vercel.app',
+        url: 'https://thumb-game.vercel.app/',
         color: '#f06292',
         thumbnail: null
       },
@@ -46,7 +46,7 @@ export class HubScene {
         id: 'wario-clone',
         title: 'Wario Clone',
         subtitle: 'Phaser 3 • Microgames',
-        url: 'https://phaser-wario-clone.vercel.app',
+        url: 'https://wario-clone.vercel.app/',
         color: '#ba68c8',
         thumbnail: null
       }
