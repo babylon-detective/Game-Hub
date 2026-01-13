@@ -62,8 +62,8 @@ export class HubScene {
     this.cardWidth = 200;
     this.cardHeight = 150;
     this.cardGap = 20;
-    this.scrollX = 0;
-    this.targetScrollX = 0;
+    this.scrollY = 0;
+    this.targetScrollY = 0;
 
     this.resize();
     window.addEventListener('resize', () => this.resize());
@@ -124,13 +124,15 @@ export class HubScene {
       this.launchGame();
     }
 
-    // Smooth scroll to selected
-    const cardsPerRow = Math.floor((this.width - 100) / (this.cardWidth + this.cardGap)) || 1;
-    const row = Math.floor(this.selectedIndex / cardsPerRow);
-    const targetY = row * (this.cardHeight + this.cardGap + 40);
-    
-    this.targetScrollX = this.selectedIndex * (this.cardWidth + this.cardGap);
-    this.scrollX += (this.targetScrollX - this.scrollX) * 0.1;
+    // Smooth vertical scroll to keep selected card in view
+    const startY = 140;
+    const rowHeight = this.cardHeight + this.cardGap + 30;
+    const selectedCenterY = startY + this.selectedIndex * rowHeight + this.cardHeight / 2;
+    const viewportCenterY = this.height / 2;
+
+    // Center selected card, but never scroll above top
+    this.targetScrollY = Math.max(0, selectedCenterY - viewportCenterY);
+    this.scrollY += (this.targetScrollY - this.scrollY) * 0.12;
   }
 
   launchGame() {
@@ -160,7 +162,7 @@ export class HubScene {
     ctx.font = 'bold 36px "Segoe UI", system-ui, sans-serif';
     ctx.shadowColor = 'rgba(79, 195, 247, 0.5)';
     ctx.shadowBlur = 20;
-    ctx.fillText('🎮 GAME HUB', w / 2, 60);
+    ctx.fillText('DREAM DEALER', w / 2, 60);
     ctx.restore();
 
     // Subtitle
@@ -205,16 +207,10 @@ export class HubScene {
 
   renderGameCards(ctx) {
     const startY = 140;
-    const cardsPerRow = Math.max(1, Math.floor((this.width - 60) / (this.cardWidth + this.cardGap)));
-    const totalWidth = Math.min(this.games.length, cardsPerRow) * (this.cardWidth + this.cardGap) - this.cardGap;
-    const startX = (this.width - totalWidth) / 2;
+    const x = (this.width - this.cardWidth) / 2;
 
     this.games.forEach((game, i) => {
-      const row = Math.floor(i / cardsPerRow);
-      const col = i % cardsPerRow;
-      
-      const x = startX + col * (this.cardWidth + this.cardGap);
-      const y = startY + row * (this.cardHeight + this.cardGap + 30);
+      const y = startY + i * (this.cardHeight + this.cardGap + 30) - this.scrollY;
       
       const isSelected = i === this.selectedIndex;
       const scale = isSelected ? 1.05 : 1;
