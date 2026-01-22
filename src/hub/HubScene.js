@@ -16,7 +16,8 @@ export class HubScene {
         subtitle: 'Phaser 3 • Adventure RPG',
         url: 'https://nageex.vercel.app/',
         color: '#4fc3f7',
-        thumbnail: null
+        thumbnail: null,
+        lastUpdate: null // Will be fetched from API
       },
       {
         id: 'island-crisis-3d',
@@ -24,7 +25,8 @@ export class HubScene {
         subtitle: 'Three.js • Action Adventure',
         url: 'https://island-crisis.vercel.app/',
         color: '#81c784',
-        thumbnail: null
+        thumbnail: null,
+        lastUpdate: null
       },
       {
         id: 'island-crisis-2d',
@@ -32,7 +34,8 @@ export class HubScene {
         subtitle: 'Phaser 3 • Platformer',
         url: 'https://phaser-island-crisis.vercel.app/',
         color: '#ffb74d',
-        thumbnail: null
+        thumbnail: null,
+        lastUpdate: null
       },
       {
         id: 'thumb-game',
@@ -40,7 +43,8 @@ export class HubScene {
         subtitle: 'Phaser 3 • Multiplayer',
         url: 'https://thumb-game.vercel.app/',
         color: '#f06292',
-        thumbnail: null
+        thumbnail: null,
+        lastUpdate: null
       },
       {
         id: 'wario-clone',
@@ -48,9 +52,13 @@ export class HubScene {
         subtitle: 'Phaser 3 • Microgames',
         url: 'https://wario-clone.vercel.app/',
         color: '#ba68c8',
-        thumbnail: null
+        thumbnail: null,
+        lastUpdate: null
       }
     ];
+    
+    // Fetch deployment dates from API
+    this.fetchDeploymentDates();
 
     // Animation state
     this.time = 0;
@@ -83,11 +91,11 @@ export class HubScene {
     // Adjust card size for mobile
     if (this.width < 600) {
       this.cardWidth = 140;
-      this.cardHeight = 110;
+      this.cardHeight = 130;
       this.cardGap = 15;
     } else {
       this.cardWidth = 200;
-      this.cardHeight = 150;
+      this.cardHeight = 170;
       this.cardGap = 20;
     }
   }
@@ -160,7 +168,7 @@ export class HubScene {
     ctx.textAlign = 'center';
     ctx.fillStyle = '#ffffff';
     ctx.font = 'bold 36px "Segoe UI", system-ui, sans-serif';
-    ctx.shadowColor = 'rgba(79, 195, 247, 0.5)';
+    ctx.shadowColor =    git add . && git commit -m "Auto-fetch deployment dates" && git push 'rgba(79, 195, 247, 0.5)';
     ctx.shadowBlur = 20;
     ctx.fillText('DREAM DEALER', w / 2, 60);
     ctx.restore();
@@ -251,24 +259,30 @@ export class HubScene {
       // Game icon placeholder
       ctx.fillStyle = game.color + '60';
       ctx.beginPath();
-      ctx.arc(x + this.cardWidth / 2, y + this.cardHeight / 2 - 10, 30, 0, Math.PI * 2);
+      ctx.arc(x + this.cardWidth / 2, y + this.cardHeight / 2 - 25, 30, 0, Math.PI * 2);
       ctx.fill();
       
       ctx.fillStyle = '#fff';
       ctx.font = '28px sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('🎮', x + this.cardWidth / 2, y + this.cardHeight / 2 - 2);
+      ctx.fillText('🎮', x + this.cardWidth / 2, y + this.cardHeight / 2 - 17);
 
       // Title
       ctx.fillStyle = isSelected ? '#fff' : 'rgba(255,255,255,0.8)';
       ctx.font = `bold ${this.cardWidth < 160 ? 12 : 14}px "Segoe UI", system-ui, sans-serif`;
       ctx.textAlign = 'center';
-      ctx.fillText(game.title, x + this.cardWidth / 2, y + this.cardHeight - 25);
+      ctx.fillText(game.title, x + this.cardWidth / 2, y + this.cardHeight - 40);
 
       // Subtitle
       ctx.fillStyle = 'rgba(255,255,255,0.5)';
       ctx.font = `${this.cardWidth < 160 ? 9 : 11}px "Segoe UI", system-ui, sans-serif`;
-      ctx.fillText(game.subtitle, x + this.cardWidth / 2, y + this.cardHeight - 10);
+      ctx.fillText(game.subtitle, x + this.cardWidth / 2, y + this.cardHeight - 25);
+
+      // Last Update date
+      const dateStr = this.formatDate(game.lastUpdate);
+      ctx.fillStyle = isSelected ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.4)';
+      ctx.font = `${this.cardWidth < 160 ? 8 : 10}px "Segoe UI", system-ui, sans-serif`;
+      ctx.fillText(`Last Update: ${dateStr}`, x + this.cardWidth / 2, y + this.cardHeight - 10);
 
       ctx.restore();
     });
@@ -302,5 +316,41 @@ export class HubScene {
     ctx.lineTo(x, y + r);
     ctx.quadraticCurveTo(x, y, x + r, y);
     ctx.closePath();
+  }
+
+  formatDate(date) {
+    if (!date) return 'Loading...';
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
+                    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return `${months[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
+  }
+
+  async fetchDeploymentDates() {
+    try {
+      const response = await fetch('/api/deployments');
+      if (!response.ok) throw new Error('API request failed');
+      
+      const data = await response.json();
+      
+      // Update games with fetched dates
+      data.deployments.forEach(deployment => {
+        const game = this.games.find(g => g.id === deployment.id);
+        if (game && deployment.lastUpdate) {
+          game.lastUpdate = new Date(deployment.lastUpdate);
+        }
+      });
+      
+      // Sort games by last update (most recent first)
+      this.games.sort((a, b) => {
+        if (!a.lastUpdate) return 1;
+        if (!b.lastUpdate) return -1;
+        return b.lastUpdate - a.lastUpdate;
+      });
+      
+      console.log('✅ Deployment dates loaded');
+    } catch (error) {
+      console.warn('⚠️ Could not fetch deployment dates:', error.message);
+      // Games will show "Loading..." for dates
+    }
   }
 }
