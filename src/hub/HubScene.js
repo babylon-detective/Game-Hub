@@ -168,7 +168,7 @@ export class HubScene {
     ctx.textAlign = 'center';
     ctx.fillStyle = '#ffffff';
     ctx.font = 'bold 36px "Segoe UI", system-ui, sans-serif';
-    ctx.shadowColor =    git add . && git commit -m "Auto-fetch deployment dates" && git push 'rgba(79, 195, 247, 0.5)';
+    ctx.shadowColor = 'rgba(79, 195, 247, 0.5)';
     ctx.shadowBlur = 20;
     ctx.fillText('DREAM DEALER', w / 2, 60);
     ctx.restore();
