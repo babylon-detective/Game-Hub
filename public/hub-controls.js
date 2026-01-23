@@ -3,9 +3,13 @@
  * Embeddable mobile controls for all Game Hub projects
  * 
  * Include this script in any game to get consistent mobile controls:
- * <script src="https://www.dreamdealer.dev/hub-controls.js"></script>
+ * <script src="https://www.dreamdealer.dev/hub-controls.js" defer></script>
  * 
- * Then call: HubControls.init({ onStart: () => togglePause() })
+ * Controls simulate keyboard input so they work with any game:
+ * - D-pad: Arrow keys (or WASD)
+ * - A button: Enter/Space (confirm)
+ * - B button: Escape (cancel/back)
+ * - Start: Calls custom onStart callback for pause
  */
 (function(global) {
   'use strict';
@@ -14,9 +18,6 @@
     container: null,
     enabled: false,
     callbacks: {
-      onDpad: null,
-      onA: null,
-      onB: null,
       onStart: null
     },
     state: {
@@ -25,15 +26,16 @@
       b: false,
       start: false
     },
+    // Key mappings for D-pad directions
+    keyMap: {
+      up: ['ArrowUp', 'KeyW'],
+      down: ['ArrowDown', 'KeyS'],
+      left: ['ArrowLeft', 'KeyA'],
+      right: ['ArrowRight', 'KeyD']
+    },
 
     /**
      * Initialize the virtual controls
-     * @param {Object} options
-     * @param {Function} options.onDpad - Callback for D-pad: (direction, pressed) => {}
-     * @param {Function} options.onA - Callback for A button: (pressed) => {}
-     * @param {Function} options.onB - Callback for B button: (pressed) => {}
-     * @param {Function} options.onStart - Callback for Start button: () => {}
-     * @param {boolean} options.hideExisting - Hide existing joystick controls (default: true)
      */
     init: function(options = {}) {
       // Only run on touch devices
@@ -42,12 +44,7 @@
         return;
       }
 
-      this.callbacks = {
-        onDpad: options.onDpad || null,
-        onA: options.onA || null,
-        onB: options.onB || null,
-        onStart: options.onStart || null
-      };
+      this.callbacks.onStart = options.onStart || null;
 
       // Hide existing joystick controls if requested
       if (options.hideExisting !== false) {
@@ -61,11 +58,31 @@
       this.createActionButtons();
       
       this.enabled = true;
-      console.log('🎮 HubControls: Virtual controls initialized');
+      console.log('🎮 HubControls: Virtual controls initialized (simulating keyboard input)');
+    },
+
+    /**
+     * Simulate a keyboard event
+     */
+    simulateKey: function(code, type) {
+      const event = new KeyboardEvent(type, {
+        code: code,
+        key: code.replace('Key', '').replace('Arrow', ''),
+        bubbles: true,
+        cancelable: true
+      });
+      document.dispatchEvent(event);
+      window.dispatchEvent(event);
+    },
+
+    /**
+     * Press/release a key
+     */
+    pressKey: function(code, pressed) {
+      this.simulateKey(code, pressed ? 'keydown' : 'keyup');
     },
 
     hideExistingControls: function() {
-      // Common selectors for virtual joysticks in Phaser games
       const selectors = [
         '.virtual-joystick',
         '.joystick-container',
@@ -77,16 +94,23 @@
         '#virtual-controls:not(#hub-virtual-controls)'
       ];
 
-      selectors.forEach(selector => {
-        document.querySelectorAll(selector).forEach(el => {
-          if (el.id !== 'hub-virtual-controls') {
-            el.style.display = 'none';
-            el.style.visibility = 'hidden';
-            el.style.pointerEvents = 'none';
-            console.log('🎮 HubControls: Hidden existing control:', selector);
-          }
+      // Wait for DOM to be ready then hide
+      const hideElements = () => {
+        selectors.forEach(selector => {
+          document.querySelectorAll(selector).forEach(el => {
+            if (el.id !== 'hub-virtual-controls') {
+              el.style.display = 'none';
+              el.style.visibility = 'hidden';
+              el.style.pointerEvents = 'none';
+            }
+          });
         });
-      });
+      };
+      
+      hideElements();
+      // Also run after a delay in case elements are created dynamically
+      setTimeout(hideElements, 1000);
+      setTimeout(hideElements, 3000);
     },
 
     createStyles: function() {
@@ -135,7 +159,6 @@
         }
         .hub-dpad-btn.pressed {
           background: rgba(255, 255, 255, 0.35);
-          transform: scale(0.95);
         }
         .hub-dpad-up { top: 0; left: 50%; transform: translateX(-50%); }
         .hub-dpad-down { bottom: 0; left: 50%; transform: translateX(-50%); }
@@ -191,7 +214,6 @@
           transition: transform 0.1s, filter 0.1s;
         }
         .hub-action-btn.pressed {
-          transform: scale(0.9);
           filter: brightness(1.3);
         }
         .hub-btn-a {
@@ -240,22 +262,34 @@
 
         btn.addEventListener('touchstart', (e) => {
           e.preventDefault();
+          e.stopPropagation();
           this.state.dpad[dir] = true;
           btn.classList.add('pressed');
-          if (this.callbacks.onDpad) this.callbacks.onDpad(dir, true);
+          // Simulate Arrow key press
+          this.pressKey('Arrow' + dir.charAt(0).toUpperCase() + dir.slice(1), true);
+          // Also simulate WASD for games that use it
+          const wasdMap = { up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD' };
+          this.pressKey(wasdMap[dir], true);
         }, { passive: false });
 
         btn.addEventListener('touchend', (e) => {
           e.preventDefault();
+          e.stopPropagation();
           this.state.dpad[dir] = false;
           btn.classList.remove('pressed');
-          if (this.callbacks.onDpad) this.callbacks.onDpad(dir, false);
+          // Release Arrow key
+          this.pressKey('Arrow' + dir.charAt(0).toUpperCase() + dir.slice(1), false);
+          // Release WASD
+          const wasdMap = { up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD' };
+          this.pressKey(wasdMap[dir], false);
         }, { passive: false });
 
         btn.addEventListener('touchcancel', () => {
           this.state.dpad[dir] = false;
           btn.classList.remove('pressed');
-          if (this.callbacks.onDpad) this.callbacks.onDpad(dir, false);
+          this.pressKey('Arrow' + dir.charAt(0).toUpperCase() + dir.slice(1), false);
+          const wasdMap = { up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD' };
+          this.pressKey(wasdMap[dir], false);
         });
 
         dpad.appendChild(btn);
@@ -271,15 +305,21 @@
 
       btn.addEventListener('touchstart', (e) => {
         e.preventDefault();
+        e.stopPropagation();
         this.state.start = true;
         btn.classList.add('pressed');
       }, { passive: false });
 
       btn.addEventListener('touchend', (e) => {
         e.preventDefault();
+        e.stopPropagation();
         this.state.start = false;
         btn.classList.remove('pressed');
+        // Call the onStart callback for pause functionality
         if (this.callbacks.onStart) this.callbacks.onStart();
+        // Also simulate Enter key for games that use it for pause
+        this.pressKey('Enter', true);
+        setTimeout(() => this.pressKey('Enter', false), 50);
       }, { passive: false });
 
       btn.addEventListener('touchcancel', () => {
@@ -294,70 +334,94 @@
       const container = document.createElement('div');
       container.className = 'hub-action-buttons';
 
-      const buttons = [
-        { id: 'a', label: 'A', callback: 'onA' },
-        { id: 'b', label: 'B', callback: 'onB' }
-      ];
+      // A button - confirms/interacts (Enter, Space, U key for some games)
+      const btnA = document.createElement('div');
+      btnA.className = 'hub-action-btn hub-btn-a';
+      btnA.textContent = 'A';
 
-      buttons.forEach(({ id, label, callback }) => {
-        const btn = document.createElement('div');
-        btn.className = `hub-action-btn hub-btn-${id}`;
-        btn.textContent = label;
+      btnA.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.state.a = true;
+        btnA.classList.add('pressed');
+        // Simulate multiple confirm keys for broad compatibility
+        this.pressKey('Space', true);
+        this.pressKey('Enter', true);
+        this.pressKey('KeyU', true); // Used by Nageex
+      }, { passive: false });
 
-        btn.addEventListener('touchstart', (e) => {
-          e.preventDefault();
-          this.state[id] = true;
-          btn.classList.add('pressed');
-          if (this.callbacks[callback]) this.callbacks[callback](true);
-        }, { passive: false });
+      btnA.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.state.a = false;
+        btnA.classList.remove('pressed');
+        this.pressKey('Space', false);
+        this.pressKey('Enter', false);
+        this.pressKey('KeyU', false);
+      }, { passive: false });
 
-        btn.addEventListener('touchend', (e) => {
-          e.preventDefault();
-          this.state[id] = false;
-          btn.classList.remove('pressed');
-          if (this.callbacks[callback]) this.callbacks[callback](false);
-        }, { passive: false });
-
-        btn.addEventListener('touchcancel', () => {
-          this.state[id] = false;
-          btn.classList.remove('pressed');
-          if (this.callbacks[callback]) this.callbacks[callback](false);
-        });
-
-        container.appendChild(btn);
+      btnA.addEventListener('touchcancel', () => {
+        this.state.a = false;
+        btnA.classList.remove('pressed');
+        this.pressKey('Space', false);
+        this.pressKey('Enter', false);
+        this.pressKey('KeyU', false);
       });
 
+      // B button - cancel/back (Escape, I key for some games)
+      const btnB = document.createElement('div');
+      btnB.className = 'hub-action-btn hub-btn-b';
+      btnB.textContent = 'B';
+
+      btnB.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.state.b = true;
+        btnB.classList.add('pressed');
+        this.pressKey('Escape', true);
+        this.pressKey('KeyI', true); // Used by some games
+        this.pressKey('Backspace', true);
+      }, { passive: false });
+
+      btnB.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.state.b = false;
+        btnB.classList.remove('pressed');
+        this.pressKey('Escape', false);
+        this.pressKey('KeyI', false);
+        this.pressKey('Backspace', false);
+      }, { passive: false });
+
+      btnB.addEventListener('touchcancel', () => {
+        this.state.b = false;
+        btnB.classList.remove('pressed');
+        this.pressKey('Escape', false);
+        this.pressKey('KeyI', false);
+        this.pressKey('Backspace', false);
+      });
+
+      container.appendChild(btnA);
+      container.appendChild(btnB);
       this.container.appendChild(container);
     },
 
-    /**
-     * Get current state of all controls
-     */
     getState: function() {
       return { ...this.state };
     },
 
-    /**
-     * Show the controls
-     */
     show: function() {
       if (this.container) {
         this.container.style.display = '';
       }
     },
 
-    /**
-     * Hide the controls
-     */
     hide: function() {
       if (this.container) {
         this.container.style.display = 'none';
       }
     },
 
-    /**
-     * Destroy and cleanup
-     */
     destroy: function() {
       if (this.container) {
         this.container.remove();
@@ -372,9 +436,13 @@
   // Export to global
   global.HubControls = HubControls;
 
-  // Auto-initialize if data attribute is present
+  // Auto-initialize when DOM is ready if data attribute is present
   if (document.currentScript?.hasAttribute('data-auto-init')) {
-    document.addEventListener('DOMContentLoaded', () => HubControls.init());
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => HubControls.init());
+    } else {
+      HubControls.init();
+    }
   }
 
 })(typeof window !== 'undefined' ? window : this);
