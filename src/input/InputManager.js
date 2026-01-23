@@ -14,7 +14,7 @@ export class InputManager {
     this.prevGamepadButtons = {};
     this.touchState = {
       direction: { x: 0, y: 0 },
-      buttons: { a: false, b: false }
+      buttons: { a: false, b: false, start: false }
     };
     
     this.deadzone = 0.15;
@@ -152,7 +152,7 @@ export class InputManager {
                this.gamepadState.buttons.b || this.touchState.buttons.b;
       case 'menu':
         return this.keys['Tab'] || this.keys['KeyM'] ||
-               this.gamepadState.buttons.start;
+               this.gamepadState.buttons.start || this.touchState.buttons.start;
       case 'up':
         return this.keys['KeyW'] || this.keys['ArrowUp'] ||
                this.gamepadState.buttons.up || (this.gamepadState.axes[1] < -this.deadzone) ||

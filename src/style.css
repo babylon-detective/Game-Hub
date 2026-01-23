@@ -124,6 +124,30 @@ html, body {
 .btn-a:active, .btn-a.pressed { transform: translateY(-50%) scale(0.9); }
 .btn-b:active, .btn-b.pressed { transform: translateX(-50%) scale(0.9); }
 
+/* Start Button - centered between D-pad and action buttons */
+.start-btn {
+  position: absolute;
+  left: 50%;
+  bottom: 60px;
+  transform: translateX(-50%);
+  padding: 8px 20px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 12px;
+  font-size: 10px;
+  font-weight: bold;
+  color: rgba(255, 255, 255, 0.5);
+  letter-spacing: 2px;
+  transition: background 0.1s, transform 0.1s;
+  pointer-events: auto;
+}
+
+.start-btn:active, .start-btn.pressed {
+  background: rgba(255, 255, 255, 0.25);
+  color: rgba(255, 255, 255, 0.8);
+  transform: translateX(-50%) scale(0.95);
+}
+
 /* Hide virtual controls on desktop */
 @media (hover: hover) and (pointer: fine) {
   #virtual-controls {

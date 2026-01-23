@@ -1,6 +1,7 @@
 /**
  * Virtual Controls for touch devices
- * Creates D-pad and action buttons overlay
+ * Creates D-pad, Start button, and action buttons overlay
+ * This module is designed to be used across all Game Hub projects
  */
 export class VirtualControls {
   constructor(inputManager) {
@@ -9,7 +10,7 @@ export class VirtualControls {
     this.enabled = false;
     
     this.dpadState = { up: false, down: false, left: false, right: false };
-    this.buttonState = { a: false, b: false };
+    this.buttonState = { a: false, b: false, start: false };
     
     this.init();
   }
@@ -23,6 +24,7 @@ export class VirtualControls {
     this.enabled = true;
     this.container.classList.add('active');
     this.createDpad();
+    this.createStartButton();
     this.createActionButtons();
   }
 
@@ -65,6 +67,32 @@ export class VirtualControls {
     });
 
     this.container.appendChild(dpad);
+  }
+
+  createStartButton() {
+    const startBtn = document.createElement('div');
+    startBtn.className = 'start-btn';
+    startBtn.textContent = 'START';
+    startBtn.dataset.button = 'start';
+
+    startBtn.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      this.handleButtonPress('start', true);
+      startBtn.classList.add('pressed');
+    }, { passive: false });
+
+    startBtn.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      this.handleButtonPress('start', false);
+      startBtn.classList.remove('pressed');
+    }, { passive: false });
+
+    startBtn.addEventListener('touchcancel', () => {
+      this.handleButtonPress('start', false);
+      startBtn.classList.remove('pressed');
+    });
+
+    this.container.appendChild(startBtn);
   }
 
   createActionButtons() {

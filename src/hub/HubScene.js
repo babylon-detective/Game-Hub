@@ -105,9 +105,7 @@ export class HubScene {
     
     if (this.isTransitioning) {
       this.transitionAlpha = Math.min(1, this.transitionAlpha + dt * 2);
-      if (this.transitionAlpha >= 1) {
-        window.location.href = this.games[this.selectedIndex].url;
-      }
+      // Don't keep trying to redirect - it's already in progress
       return;
     }
 
@@ -144,8 +142,17 @@ export class HubScene {
   }
 
   launchGame() {
+    if (this.isTransitioning) return; // Prevent double-tap
+    
     this.isTransitioning = true;
     this.transitionAlpha = 0;
+    
+    const url = this.games[this.selectedIndex].url;
+    
+    // Redirect after short animation delay - more reliable on iOS
+    setTimeout(() => {
+      window.location.assign(url);
+    }, 500);
   }
 
   render() {
