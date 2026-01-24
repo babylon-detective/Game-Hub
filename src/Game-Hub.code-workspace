@@ -19,5 +19,7 @@
 			"path": "../../Thumb-Game"
 		}
 	],
-	"settings": {}
+	"settings": {
+		"terminal.integrated.cwd": "${workspaceFolder}"
+	}
 }
