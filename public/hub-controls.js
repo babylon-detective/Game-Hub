@@ -203,39 +203,33 @@
       updateKey('KeyW', upNow);
       updateKey('KeyS', downNow);
 
-      // A button -> Space/Enter (state change only)
+      // A button -> Confirm/Action (Space, KeyU) - NOT Enter, NOT pause
       if (gp.buttons.a !== prev.a) {
         this.pressKey('Space', gp.buttons.a);
-        this.pressKey('Enter', gp.buttons.a);
         this.pressKey('KeyU', gp.buttons.a);
       }
 
-      // B button -> Escape (state change only)
+      // B button -> Cancel/Back (Escape, KeyI) - for backing out of menus
       if (gp.buttons.b !== prev.b) {
         this.pressKey('Escape', gp.buttons.b);
         this.pressKey('KeyI', gp.buttons.b);
       }
 
-      // Start button -> Simulate Escape key press (single pulse for pause toggle)
-      // This fires ONCE on press, not continuously
+      // Start button -> PAUSE ONLY (KeyP pulse)
+      // Single pulse, fires once on press - this is THE pause button
       if (gp.buttons.start && !prev.start) {
-        // Fire single keydown+keyup pulse for pause
-        this.simulateKey('Escape', 'keydown');
-        setTimeout(() => this.simulateKey('Escape', 'keyup'), 50);
-        
-        // Also fire Tab for games that use it for menu
-        this.simulateKey('Tab', 'keydown');
-        setTimeout(() => this.simulateKey('Tab', 'keyup'), 50);
-        
-        // Also fire KeyP for games that use P for pause
         this.simulateKey('KeyP', 'keydown');
         setTimeout(() => this.simulateKey('KeyP', 'keyup'), 50);
         
+        // Also fire Enter for menu confirmation (Start often confirms in pause menus)
+        this.simulateKey('Enter', 'keydown');
+        setTimeout(() => this.simulateKey('Enter', 'keyup'), 50);
+        
         if (this.callbacks.onStart) this.callbacks.onStart();
-        console.log('🎮 Start pressed - pause pulse sent');
+        console.log('🎮 Start pressed - pause (KeyP) pulse sent');
       }
 
-      // Select button -> Also useful for menus (simulate Tab)
+      // Select button -> Tab for menu navigation/inventory
       if (gp.buttons.select && !prev.select) {
         this.simulateKey('Tab', 'keydown');
         setTimeout(() => this.simulateKey('Tab', 'keyup'), 50);
@@ -615,17 +609,15 @@
         // Call the onStart callback for pause functionality
         if (this.callbacks.onStart) this.callbacks.onStart();
         
-        // Simulate pause keys as single pulse (same as gamepad Start)
-        this.simulateKey('Escape', 'keydown');
-        setTimeout(() => this.simulateKey('Escape', 'keyup'), 50);
-        
-        this.simulateKey('Tab', 'keydown');
-        setTimeout(() => this.simulateKey('Tab', 'keyup'), 50);
-        
+        // PAUSE ONLY - KeyP pulse (same as gamepad Start)
         this.simulateKey('KeyP', 'keydown');
         setTimeout(() => this.simulateKey('KeyP', 'keyup'), 50);
         
-        console.log('🎮 Touch Start pressed - pause pulse sent');
+        // Also Enter for confirming in pause menus
+        this.simulateKey('Enter', 'keydown');
+        setTimeout(() => this.simulateKey('Enter', 'keyup'), 50);
+        
+        console.log('🎮 Touch Start pressed - pause (KeyP) pulse sent');
       }, { passive: false });
 
       btn.addEventListener('touchcancel', () => {
@@ -640,7 +632,7 @@
       const container = document.createElement('div');
       container.className = 'hub-action-buttons';
 
-      // A button - confirms/interacts (Enter, Space, U key for some games)
+      // A button - Confirm/Action (Space, KeyU) - NOT Enter, NOT pause
       const btnA = document.createElement('div');
       btnA.className = 'hub-action-btn hub-btn-a';
       btnA.textContent = 'A';
@@ -650,10 +642,9 @@
         e.stopPropagation();
         this.state.a = true;
         btnA.classList.add('pressed');
-        // Simulate multiple confirm keys for broad compatibility
+        // Confirm/Action keys only - NOT Enter (Enter is for Start/menus)
         this.pressKey('Space', true);
-        this.pressKey('Enter', true);
-        this.pressKey('KeyU', true); // Used by Nageex
+        this.pressKey('KeyU', true);
       }, { passive: false });
 
       btnA.addEventListener('touchend', (e) => {
@@ -662,7 +653,6 @@
         this.state.a = false;
         btnA.classList.remove('pressed');
         this.pressKey('Space', false);
-        this.pressKey('Enter', false);
         this.pressKey('KeyU', false);
       }, { passive: false });
 
@@ -670,11 +660,10 @@
         this.state.a = false;
         btnA.classList.remove('pressed');
         this.pressKey('Space', false);
-        this.pressKey('Enter', false);
         this.pressKey('KeyU', false);
       });
 
-      // B button - cancel/back (Escape, I key for some games)
+      // B button - Cancel/Back (Escape, KeyI)
       const btnB = document.createElement('div');
       btnB.className = 'hub-action-btn hub-btn-b';
       btnB.textContent = 'B';
