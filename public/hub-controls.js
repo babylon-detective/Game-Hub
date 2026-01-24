@@ -203,22 +203,42 @@
       updateKey('KeyW', upNow);
       updateKey('KeyS', downNow);
 
-      // A button -> Space/Enter
+      // A button -> Space/Enter (state change only)
       if (gp.buttons.a !== prev.a) {
         this.pressKey('Space', gp.buttons.a);
         this.pressKey('Enter', gp.buttons.a);
         this.pressKey('KeyU', gp.buttons.a);
       }
 
-      // B button -> Escape
+      // B button -> Escape (state change only)
       if (gp.buttons.b !== prev.b) {
         this.pressKey('Escape', gp.buttons.b);
         this.pressKey('KeyI', gp.buttons.b);
       }
 
-      // Start button -> Enter (for pause)
+      // Start button -> Simulate Escape key press (single pulse for pause toggle)
+      // This fires ONCE on press, not continuously
       if (gp.buttons.start && !prev.start) {
+        // Fire single keydown+keyup pulse for pause
+        this.simulateKey('Escape', 'keydown');
+        setTimeout(() => this.simulateKey('Escape', 'keyup'), 50);
+        
+        // Also fire Tab for games that use it for menu
+        this.simulateKey('Tab', 'keydown');
+        setTimeout(() => this.simulateKey('Tab', 'keyup'), 50);
+        
+        // Also fire KeyP for games that use P for pause
+        this.simulateKey('KeyP', 'keydown');
+        setTimeout(() => this.simulateKey('KeyP', 'keyup'), 50);
+        
         if (this.callbacks.onStart) this.callbacks.onStart();
+        console.log('🎮 Start pressed - pause pulse sent');
+      }
+
+      // Select button -> Also useful for menus (simulate Tab)
+      if (gp.buttons.select && !prev.select) {
+        this.simulateKey('Tab', 'keydown');
+        setTimeout(() => this.simulateKey('Tab', 'keyup'), 50);
       }
     },
 
@@ -303,6 +323,27 @@
     },
 
     /**
+     * Check if a direction was just pressed
+     */
+    justPressedDirection: function(direction) {
+      const state = this.getState();
+      const dz = 0.5;
+      let current = false;
+      
+      switch(direction) {
+        case 'up': current = state.direction.y < -dz; break;
+        case 'down': current = state.direction.y > dz; break;
+        case 'left': current = state.direction.x < -dz; break;
+        case 'right': current = state.direction.x > dz; break;
+      }
+      
+      const prevKey = `_prev_dir_${direction}`;
+      const prev = this[prevKey] || false;
+      this[prevKey] = current;
+      return current && !prev;
+    },
+
+    /**
      * Check if gamepad is connected
      */
     hasGamepad: function() {
@@ -312,10 +353,6 @@
     /**
      * Check if device has touch capability
      */
-    hasTouch: function() {
-      return this.isTouch;
-    },
-
     hasTouch: function() {
       return this.isTouch;
     },
@@ -574,11 +611,21 @@
         e.stopPropagation();
         this.state.start = false;
         btn.classList.remove('pressed');
+        
         // Call the onStart callback for pause functionality
         if (this.callbacks.onStart) this.callbacks.onStart();
-        // Also simulate Enter key for games that use it for pause
-        this.pressKey('Enter', true);
-        setTimeout(() => this.pressKey('Enter', false), 50);
+        
+        // Simulate pause keys as single pulse (same as gamepad Start)
+        this.simulateKey('Escape', 'keydown');
+        setTimeout(() => this.simulateKey('Escape', 'keyup'), 50);
+        
+        this.simulateKey('Tab', 'keydown');
+        setTimeout(() => this.simulateKey('Tab', 'keyup'), 50);
+        
+        this.simulateKey('KeyP', 'keydown');
+        setTimeout(() => this.simulateKey('KeyP', 'keyup'), 50);
+        
+        console.log('🎮 Touch Start pressed - pause pulse sent');
       }, { passive: false });
 
       btn.addEventListener('touchcancel', () => {
