@@ -67,9 +67,9 @@ export class HubScene {
     this.isTransitioning = false;
     
     // Layout
-    this.cardWidth = 200;
-    this.cardHeight = 150;
-    this.cardGap = 20;
+    this.cardWidth = 600;
+    this.cardHeight = 450;
+    this.cardGap = 40;
     this.scrollY = 0;
     this.targetScrollY = 0;
 
@@ -90,13 +90,13 @@ export class HubScene {
     
     // Adjust card size for mobile
     if (this.width < 600) {
-      this.cardWidth = 140;
-      this.cardHeight = 130;
-      this.cardGap = 15;
+      this.cardWidth = 420;
+      this.cardHeight = 390;
+      this.cardGap = 30;
     } else {
-      this.cardWidth = 200;
-      this.cardHeight = 170;
-      this.cardGap = 20;
+      this.cardWidth = 600;
+      this.cardHeight = 450;
+      this.cardGap = 40;
     }
   }
 
@@ -263,33 +263,22 @@ export class HubScene {
 
       ctx.shadowBlur = 0;
 
-      // Game icon placeholder
-      ctx.fillStyle = game.color + '60';
-      ctx.beginPath();
-      ctx.arc(x + this.cardWidth / 2, y + this.cardHeight / 2 - 25, 30, 0, Math.PI * 2);
-      ctx.fill();
-      
-      ctx.fillStyle = '#fff';
-      ctx.font = '28px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('🎮', x + this.cardWidth / 2, y + this.cardHeight / 2 - 17);
-
       // Title
       ctx.fillStyle = isSelected ? '#fff' : 'rgba(255,255,255,0.8)';
-      ctx.font = `bold ${this.cardWidth < 160 ? 12 : 14}px "Segoe UI", system-ui, sans-serif`;
+      ctx.font = `bold ${this.cardWidth < 160 ? 36 : 42}px "Segoe UI", system-ui, sans-serif`;
       ctx.textAlign = 'center';
-      ctx.fillText(game.title, x + this.cardWidth / 2, y + this.cardHeight - 40);
+      ctx.fillText(game.title, x + this.cardWidth / 2, y + this.cardHeight / 2 - 10);
 
       // Subtitle
       ctx.fillStyle = 'rgba(255,255,255,0.5)';
-      ctx.font = `${this.cardWidth < 160 ? 9 : 11}px "Segoe UI", system-ui, sans-serif`;
-      ctx.fillText(game.subtitle, x + this.cardWidth / 2, y + this.cardHeight - 25);
+      ctx.font = `${this.cardWidth < 160 ? 27 : 33}px "Segoe UI", system-ui, sans-serif`;
+      ctx.fillText(game.subtitle, x + this.cardWidth / 2, y + this.cardHeight / 2 + 30);
 
       // Last Update date
       const dateStr = this.formatDate(game.lastUpdate);
       ctx.fillStyle = isSelected ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.4)';
-      ctx.font = `${this.cardWidth < 160 ? 8 : 10}px "Segoe UI", system-ui, sans-serif`;
-      ctx.fillText(`Last Update: ${dateStr}`, x + this.cardWidth / 2, y + this.cardHeight - 10);
+      ctx.font = `${this.cardWidth < 160 ? 24 : 30}px "Segoe UI", system-ui, sans-serif`;
+      ctx.fillText(`Last Update: ${dateStr}`, x + this.cardWidth / 2, y + this.cardHeight / 2 + 70);
 
       ctx.restore();
     });
