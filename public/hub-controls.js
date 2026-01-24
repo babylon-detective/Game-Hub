@@ -1,15 +1,22 @@
 /**
- * Dream Dealer Hub - Universal Virtual Controls
- * Embeddable mobile controls for all Game Hub projects
+ * Dream Dealer Hub - Universal Virtual Controls v2.0
+ * Embeddable mobile controls + gamepad support for all Game Hub projects
  * 
- * Include this script in any game to get consistent mobile controls:
+ * Include this script in any game to get consistent controls:
  * <script src="https://www.dreamdealer.dev/hub-controls.js" defer></script>
  * 
- * Controls simulate keyboard input so they work with any game:
- * - D-pad: Arrow keys (or WASD)
- * - A button: Enter/Space (confirm)
- * - B button: Escape (cancel/back)
- * - Start: Calls custom onStart callback for pause
+ * Features:
+ * - Virtual D-pad and buttons for touch devices
+ * - Unified gamepad polling (works with any controller)
+ * - Keyboard simulation for legacy compatibility
+ * - Pollable state API for modern integration
+ * 
+ * Usage in games:
+ *   // Option 1: Just include script - keyboard events auto-dispatched
+ *   // Option 2: Poll state directly
+ *   const input = HubControls.getState();
+ *   if (input.direction.x < -0.5) moveLeft();
+ *   if (input.buttons.a) jump();
  */
 (function(global) {
   'use strict';
@@ -17,8 +24,10 @@
   const HubControls = {
     container: null,
     enabled: false,
+    isTouch: false,
     callbacks: {
-      onStart: null
+      onStart: null,
+      onStateChange: null
     },
     state: {
       dpad: { up: false, down: false, left: false, right: false },
@@ -26,6 +35,19 @@
       b: false,
       start: false
     },
+    gamepadState: {
+      connected: false,
+      axes: [0, 0, 0, 0],
+      buttons: {
+        a: false, b: false, x: false, y: false,
+        lb: false, rb: false, lt: false, rt: false,
+        select: false, start: false,
+        l3: false, r3: false,
+        up: false, down: false, left: false, right: false
+      }
+    },
+    prevGamepadButtons: {},
+    deadzone: 0.15,
     // Key mappings for D-pad directions
     keyMap: {
       up: ['ArrowUp', 'KeyW'],
@@ -38,13 +60,24 @@
      * Initialize the virtual controls
      */
     init: function(options = {}) {
-      // Only run on touch devices
-      if (!('ontouchstart' in window) && navigator.maxTouchPoints <= 0) {
-        console.log('🎮 HubControls: Desktop detected, skipping virtual controls');
+      this.callbacks.onStart = options.onStart || null;
+      this.callbacks.onStateChange = options.onStateChange || null;
+      
+      // Detect touch capability
+      this.isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+
+      // Setup gamepad listeners (works on all devices)
+      this.setupGamepad();
+      
+      // Start polling loop for gamepad
+      this.startPolling();
+
+      // Only create visual controls on touch devices
+      if (!this.isTouch) {
+        console.log('🎮 HubControls: Desktop detected, gamepad polling active, no virtual controls');
+        this.enabled = true;
         return;
       }
-
-      this.callbacks.onStart = options.onStart || null;
 
       // Hide existing joystick controls if requested
       if (options.hideExisting !== false) {
@@ -58,7 +91,233 @@
       this.createActionButtons();
       
       this.enabled = true;
-      console.log('🎮 HubControls: Virtual controls initialized (simulating keyboard input)');
+      console.log('🎮 HubControls: Virtual controls initialized + gamepad polling active');
+    },
+
+    /**
+     * Setup gamepad connection listeners
+     */
+    setupGamepad: function() {
+      window.addEventListener('gamepadconnected', (e) => {
+        console.log('🎮 HubControls: Gamepad connected -', e.gamepad.id);
+        this.gamepadState.connected = true;
+      });
+
+      window.addEventListener('gamepaddisconnected', () => {
+        console.log('🎮 HubControls: Gamepad disconnected');
+        this.gamepadState.connected = false;
+      });
+    },
+
+    /**
+     * Start the polling loop for gamepad state
+     */
+    startPolling: function() {
+      const poll = () => {
+        this.pollGamepad();
+        requestAnimationFrame(poll);
+      };
+      requestAnimationFrame(poll);
+    },
+
+    /**
+     * Poll gamepad and update state
+     */
+    pollGamepad: function() {
+      const gamepads = navigator.getGamepads();
+      const gp = gamepads[0] || gamepads[1] || gamepads[2] || gamepads[3];
+      
+      if (!gp) {
+        if (this.gamepadState.connected) {
+          this.gamepadState.connected = false;
+        }
+        return;
+      }
+
+      this.gamepadState.connected = true;
+      this.gamepadState.axes = [
+        gp.axes[0] || 0,
+        gp.axes[1] || 0,
+        gp.axes[2] || 0,
+        gp.axes[3] || 0
+      ];
+      
+      // Store previous state
+      this.prevGamepadButtons = { ...this.gamepadState.buttons };
+      
+      // Map buttons (Xbox/standard layout)
+      this.gamepadState.buttons = {
+        a: gp.buttons[0]?.pressed || false,
+        b: gp.buttons[1]?.pressed || false,
+        x: gp.buttons[2]?.pressed || false,
+        y: gp.buttons[3]?.pressed || false,
+        lb: gp.buttons[4]?.pressed || false,
+        rb: gp.buttons[5]?.pressed || false,
+        lt: gp.buttons[6]?.pressed || false,
+        rt: gp.buttons[7]?.pressed || false,
+        select: gp.buttons[8]?.pressed || false,
+        start: gp.buttons[9]?.pressed || false,
+        l3: gp.buttons[10]?.pressed || false,
+        r3: gp.buttons[11]?.pressed || false,
+        up: gp.buttons[12]?.pressed || false,
+        down: gp.buttons[13]?.pressed || false,
+        left: gp.buttons[14]?.pressed || false,
+        right: gp.buttons[15]?.pressed || false
+      };
+
+      // Simulate keyboard events for gamepad buttons (legacy compatibility)
+      this.simulateGamepadKeys();
+    },
+
+    /**
+     * Simulate keyboard events based on gamepad state
+     */
+    simulateGamepadKeys: function() {
+      const gp = this.gamepadState;
+      const prev = this.prevGamepadButtons;
+      const dz = this.deadzone;
+
+      // D-pad and stick -> Arrow keys
+      const leftNow = gp.buttons.left || gp.axes[0] < -dz;
+      const rightNow = gp.buttons.right || gp.axes[0] > dz;
+      const upNow = gp.buttons.up || gp.axes[1] < -dz;
+      const downNow = gp.buttons.down || gp.axes[1] > dz;
+
+      // Track simulated key states to avoid repeated events
+      if (!this._simKeys) this._simKeys = {};
+
+      // Helper to fire key event only on state change
+      const updateKey = (code, pressed) => {
+        if (this._simKeys[code] !== pressed) {
+          this._simKeys[code] = pressed;
+          this.simulateKey(code, pressed ? 'keydown' : 'keyup');
+        }
+      };
+
+      updateKey('ArrowLeft', leftNow);
+      updateKey('ArrowRight', rightNow);
+      updateKey('ArrowUp', upNow);
+      updateKey('ArrowDown', downNow);
+      updateKey('KeyA', leftNow);
+      updateKey('KeyD', rightNow);
+      updateKey('KeyW', upNow);
+      updateKey('KeyS', downNow);
+
+      // A button -> Space/Enter
+      if (gp.buttons.a !== prev.a) {
+        this.pressKey('Space', gp.buttons.a);
+        this.pressKey('Enter', gp.buttons.a);
+        this.pressKey('KeyU', gp.buttons.a);
+      }
+
+      // B button -> Escape
+      if (gp.buttons.b !== prev.b) {
+        this.pressKey('Escape', gp.buttons.b);
+        this.pressKey('KeyI', gp.buttons.b);
+      }
+
+      // Start button -> Enter (for pause)
+      if (gp.buttons.start && !prev.start) {
+        if (this.callbacks.onStart) this.callbacks.onStart();
+      }
+    },
+
+    /**
+     * Get unified input state from all sources (touch + gamepad)
+     * This is the primary API for games to use
+     * @returns {Object} Normalized input state
+     */
+    getState: function() {
+      const gp = this.gamepadState;
+      const touch = this.state;
+      const dz = this.deadzone;
+
+      // Calculate direction from all sources
+      let dirX = 0, dirY = 0;
+
+      // Touch D-pad
+      if (touch.dpad.left) dirX -= 1;
+      if (touch.dpad.right) dirX += 1;
+      if (touch.dpad.up) dirY -= 1;
+      if (touch.dpad.down) dirY += 1;
+
+      // Gamepad stick (overrides touch if significant)
+      if (gp.connected) {
+        if (Math.abs(gp.axes[0]) > dz) dirX = gp.axes[0];
+        if (Math.abs(gp.axes[1]) > dz) dirY = gp.axes[1];
+        
+        // D-pad (overrides stick)
+        if (gp.buttons.left) dirX = -1;
+        if (gp.buttons.right) dirX = 1;
+        if (gp.buttons.up) dirY = -1;
+        if (gp.buttons.down) dirY = 1;
+      }
+
+      // Clamp
+      dirX = Math.max(-1, Math.min(1, dirX));
+      dirY = Math.max(-1, Math.min(1, dirY));
+
+      return {
+        // Normalized direction vector (-1 to 1)
+        direction: { x: dirX, y: dirY },
+        
+        // Action buttons (merged from all sources)
+        buttons: {
+          a: touch.a || gp.buttons.a,
+          b: touch.b || gp.buttons.b,
+          x: gp.buttons.x,
+          y: gp.buttons.y,
+          start: touch.start || gp.buttons.start,
+          select: gp.buttons.select,
+          lb: gp.buttons.lb,
+          rb: gp.buttons.rb,
+          lt: gp.buttons.lt,
+          rt: gp.buttons.rt
+        },
+
+        // Raw gamepad data for games that need it
+        gamepad: gp.connected ? {
+          connected: true,
+          axes: [...gp.axes],
+          buttons: { ...gp.buttons }
+        } : null,
+
+        // Input source info
+        source: {
+          touch: this.isTouch,
+          gamepad: gp.connected
+        }
+      };
+    },
+
+    /**
+     * Check if a button was just pressed (not held)
+     * Call this once per frame
+     */
+    justPressed: function(button) {
+      const current = this.getState().buttons[button];
+      const prevKey = `_prev_${button}`;
+      const prev = this[prevKey] || false;
+      this[prevKey] = current;
+      return current && !prev;
+    },
+
+    /**
+     * Check if gamepad is connected
+     */
+    hasGamepad: function() {
+      return this.gamepadState.connected;
+    },
+
+    /**
+     * Check if device has touch capability
+     */
+    hasTouch: function() {
+      return this.isTouch;
+    },
+
+    hasTouch: function() {
+      return this.isTouch;
     },
 
     /**
