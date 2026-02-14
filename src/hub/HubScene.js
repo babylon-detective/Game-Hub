@@ -72,6 +72,7 @@ export class HubScene {
     this.cardGap = 40;
     this.scrollY = 0;
     this.targetScrollY = 0;
+    this.startY = 140;
 
     this.resize();
     window.addEventListener('resize', () => this.resize());
@@ -88,16 +89,14 @@ export class HubScene {
     this.width = window.innerWidth;
     this.height = window.innerHeight;
     
-    // Adjust card size for mobile
-    if (this.width < 600) {
-      this.cardWidth = 420;
-      this.cardHeight = 390;
-      this.cardGap = 30;
-    } else {
-      this.cardWidth = 600;
-      this.cardHeight = 450;
-      this.cardGap = 40;
-    }
+    // Responsive card sizing
+    const horizontalPadding = this.width < 500 ? 24 : 40;
+    const maxCardWidth = Math.min(600, this.width - horizontalPadding);
+    const minCardWidth = 300;
+    this.cardWidth = Math.max(minCardWidth, maxCardWidth);
+    this.cardHeight = Math.round(this.cardWidth * 0.75);
+    this.cardGap = this.width < 600 ? 20 : 40;
+    this.startY = this.width < 600 ? 110 : 140;
   }
 
   update(dt) {
@@ -131,7 +130,7 @@ export class HubScene {
     }
 
     // Smooth vertical scroll to keep selected card in view
-    const startY = 140;
+    const startY = this.startY;
     const rowHeight = this.cardHeight + this.cardGap + 30;
     const selectedCenterY = startY + this.selectedIndex * rowHeight + this.cardHeight / 2;
     const viewportCenterY = this.height / 2;
@@ -221,7 +220,7 @@ export class HubScene {
   }
 
   renderGameCards(ctx) {
-    const startY = 140;
+    const startY = this.startY;
     const x = (this.width - this.cardWidth) / 2;
 
     this.games.forEach((game, i) => {
@@ -263,22 +262,27 @@ export class HubScene {
 
       ctx.shadowBlur = 0;
 
+      const sizeScale = Math.max(0.75, Math.min(1, this.cardWidth / 600));
+      const titleSize = Math.round(42 * sizeScale);
+      const subtitleSize = Math.round(33 * sizeScale);
+      const dateSize = Math.round(30 * sizeScale);
+
       // Title
       ctx.fillStyle = isSelected ? '#fff' : 'rgba(255,255,255,0.8)';
-      ctx.font = `bold ${this.cardWidth < 160 ? 36 : 42}px "Segoe UI", system-ui, sans-serif`;
+      ctx.font = `bold ${titleSize}px "Segoe UI", system-ui, sans-serif`;
       ctx.textAlign = 'center';
-      ctx.fillText(game.title, x + this.cardWidth / 2, y + this.cardHeight / 2 - 10);
+      ctx.fillText(game.title, x + this.cardWidth / 2, y + this.cardHeight / 2 - Math.round(10 * sizeScale));
 
       // Subtitle
       ctx.fillStyle = 'rgba(255,255,255,0.5)';
-      ctx.font = `${this.cardWidth < 160 ? 27 : 33}px "Segoe UI", system-ui, sans-serif`;
-      ctx.fillText(game.subtitle, x + this.cardWidth / 2, y + this.cardHeight / 2 + 30);
+      ctx.font = `${subtitleSize}px "Segoe UI", system-ui, sans-serif`;
+      ctx.fillText(game.subtitle, x + this.cardWidth / 2, y + this.cardHeight / 2 + Math.round(30 * sizeScale));
 
       // Last Update date
       const dateStr = this.formatDate(game.lastUpdate);
       ctx.fillStyle = isSelected ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.4)';
-      ctx.font = `${this.cardWidth < 160 ? 24 : 30}px "Segoe UI", system-ui, sans-serif`;
-      ctx.fillText(`Last Update: ${dateStr}`, x + this.cardWidth / 2, y + this.cardHeight / 2 + 70);
+      ctx.font = `${dateSize}px "Segoe UI", system-ui, sans-serif`;
+      ctx.fillText(`Last Update: ${dateStr}`, x + this.cardWidth / 2, y + this.cardHeight / 2 + Math.round(70 * sizeScale));
 
       ctx.restore();
     });
@@ -323,7 +327,9 @@ export class HubScene {
 
   async fetchDeploymentDates() {
     try {
-      const response = await fetch('/api/deployments');
+      const response = await fetch(`/api/deployments?t=${Date.now()}`, {
+        cache: 'no-store'
+      });
       if (!response.ok) throw new Error('API request failed');
       
       const data = await response.json();

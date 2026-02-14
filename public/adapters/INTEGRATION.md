@@ -1,30 +1,44 @@
-# Game Hub Input System - Integration Guide
+# Game Hub Input System - Integration Guide (v4.0)
 
 ## Overview
 
-The Game Hub provides a unified input system that works across all platforms:
-- **Touch devices**: Virtual D-pad + A/B buttons
-- **Gamepads**: Full controller support (Xbox, PlayStation, generic)
-- **Keyboard**: WASD/Arrow keys + action keys
+The Game Hub provides a **two-layer input architecture** that cleanly separates concerns:
 
-## Architecture
+- **Layer 1 (hub-controls.js)**: Hardware access only — touch controls + gamepad polling
+- **Layer 2 (Per-game adapter)**: Input mapping — merges HubControls state with keyboard bindings
+
+### Input Sources
+- **Touch devices**: Virtual D-pad + A/B/Start buttons
+- **Gamepads**: Full controller support (Xbox, PlayStation, generic)
+- **Keyboard**: Handled by each game's native input system (NOT hub-controls.js)
+
+## Two-Layer Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    hub-controls.js                          │
-│  ├─ Virtual touch controls (D-pad, A, B, Start)            │
-│  ├─ Gamepad polling (all 4 controller slots)               │
-│  ├─ Keyboard event simulation (legacy compatibility)        │
-│  └─ Unified state API: HubControls.getState()              │
+│             LAYER 1: hub-controls.js (Game-Hub)             │
+│  ├─ Sole owner of hardware: gamepad polling, touch D-pad   │
+│  ├─ Exposes POLLABLE STATE API only                        │
+│  ├─ NO synthetic keyboard events (removed in v4)           │
+│  ├─ NO callbacks (removed in v4)                           │
+│  └─ Universal button vocabulary: a, b, x, y, start, etc.   │
 └─────────────────────────────────────────────────────────────┘
                               ↓
 ┌─────────────────────────────────────────────────────────────┐
-│                    Framework Adapters                        │
-│  ├─ phaser-adapter.js  (Phaser 3 games)                    │
-│  ├─ three-adapter.js   (Three.js / Babylon.js games)       │
-│  └─ index.js           (Auto-detection & generic adapter)  │
+│           LAYER 2: Per-Game Adapter / InputManager          │
+│  ├─ Reads HubControls.getState() for touch/gamepad         │
+│  ├─ Adds game-specific keyboard bindings natively          │
+│  ├─ Merges both sources with OR logic                      │
+│  ├─ Maps universal vocabulary → game-specific actions      │
+│  └─ Owns all game logic (pause, jump, attack, etc.)        │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+### Why This Design?
+
+The previous v3 design simulated keyboard events (WASD, Enter, Space) from gamepad/touch input. This caused **double-trigger conflicts** in games that also listen for keyboard input directly.
+
+**v4 Solution**: hub-controls.js now ONLY updates internal state silently. Games poll `HubControls.getState()` in their game loop and handle keyboard input separately.
 
 ---
 

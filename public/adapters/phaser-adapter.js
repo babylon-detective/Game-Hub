@@ -1,6 +1,12 @@
 /**
- * HubControls Phaser 3 Adapter
- * Bridges HubControls input state to Phaser's input system
+ * HubControls Phaser 3 Adapter  (Layer 2 — per-game)
+ * Bridges HubControls pollable state to Phaser's input system.
+ * 
+ * This is the canonical Layer 2 adapter for Phaser 3 games:
+ *   • Reads HubControls.getState() for touch D-pad / action buttons / gamepad
+ *   • Adds game-specific Phaser keyboard bindings
+ *   • Merges both sources with OR logic each frame
+ *   • Provides justPressed / justReleased for edge detection
  * 
  * Usage in your Phaser scene:
  * 
@@ -12,12 +18,12 @@
  *     }
  *     
  *     update() {
- *       // Use unified input (works with touch, gamepad, keyboard)
  *       const input = this.hubInput.getInput();
- *       
  *       if (input.left) this.player.moveLeft();
  *       if (input.right) this.player.moveRight();
- *       if (input.a) this.player.jump();
+ *       if (this.hubInput.justPressed('a')) this.player.jump();
+ *       if (this.hubInput.justPressed('start')) this.togglePause();
+ *       this.hubInput.endFrame();
  *     }
  *   }
  */
@@ -34,7 +40,7 @@ export class HubPhaserAdapter {
     this.options = {
       disableNativeTouch: true,
       keyMapping: {
-        confirm: ['SPACE', 'ENTER', 'U'],
+        confirm: ['SPACE', 'U'],
         cancel: ['ESC', 'I', 'BACKSPACE'],
         up: ['W', 'UP'],
         down: ['S', 'DOWN'],

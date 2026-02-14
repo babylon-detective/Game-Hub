@@ -15,7 +15,7 @@ export default async function handler(req, res) {
   // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET');
-  res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate'); // Cache for 5 min
+  res.setHeader('Cache-Control', 'no-store, s-maxage=60, stale-while-revalidate=30');
 
   const token = process.env.VERCEL_API_TOKEN;
   

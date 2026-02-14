@@ -1,22 +1,34 @@
 /**
- * Dream Dealer Hub - Universal Virtual Controls v2.0
+ * Dream Dealer Hub - Universal Virtual Controls v4.0  (Layer 1)
  * Embeddable mobile controls + gamepad support for all Game Hub projects
  * 
  * Include this script in any game to get consistent controls:
  * <script src="https://www.dreamdealer.dev/hub-controls.js" defer></script>
  * 
- * Features:
- * - Virtual D-pad and buttons for touch devices
- * - Unified gamepad polling (works with any controller)
- * - Keyboard simulation for legacy compatibility
- * - Pollable state API for modern integration
+ * === TWO-LAYER ARCHITECTURE ===
+ * 
+ * Layer 1  (THIS FILE — hub-controls.js, lives in Game-Hub)
+ *   • Sole owner of hardware access: gamepad polling, touch virtual controls
+ *   • Exposes a pollable state API ONLY — NO synthetic keyboard events
+ *   • Defines the universal button vocabulary:
+ *       direction, a, b, x, y, start, select, lb, rb, lt, rt
+ *   • Does NOT call game callbacks or dispatch keyboard events
+ * 
+ * Layer 2  (Per-game adapter / InputManager, lives in each game)
+ *   • Reads from HubControls.getState() + adds game-specific keyboard bindings
+ *   • Maps universal vocabulary to game-specific actions
+ *   • Owns all game logic (pause, jump, attack, etc.)
  * 
  * Usage in games:
- *   // Option 1: Just include script - keyboard events auto-dispatched
- *   // Option 2: Poll state directly
- *   const input = HubControls.getState();
- *   if (input.direction.x < -0.5) moveLeft();
- *   if (input.buttons.a) jump();
+ *   // Poll state every frame in your game loop:
+ *   const state = HubControls.getState();
+ *   if (state.direction.x < -0.5) moveLeft();
+ *   if (state.direction.x > 0.5) moveRight();
+ *   if (state.buttons.a) jump();
+ *   if (HubControls.justPressed('start')) togglePause();
+ * 
+ * For keyboard input, use your game's native keyboard handling.
+ * HubControls ONLY handles: touch virtual controls + gamepad polling.
  */
 (function(global) {
   'use strict';
@@ -25,16 +37,16 @@
     container: null,
     enabled: false,
     isTouch: false,
-    callbacks: {
-      onStart: null,
-      onStateChange: null
-    },
+    
+    // Internal touch state
     state: {
       dpad: { up: false, down: false, left: false, right: false },
       a: false,
       b: false,
       start: false
     },
+    
+    // Internal gamepad state
     gamepadState: {
       connected: false,
       axes: [0, 0, 0, 0],
@@ -46,23 +58,19 @@
         up: false, down: false, left: false, right: false
       }
     },
+    
+    // Previous state for justPressed detection
     prevGamepadButtons: {},
+    prevTouchState: {},
+    
     deadzone: 0.15,
-    // Key mappings for D-pad directions
-    keyMap: {
-      up: ['ArrowUp', 'KeyW'],
-      down: ['ArrowDown', 'KeyS'],
-      left: ['ArrowLeft', 'KeyA'],
-      right: ['ArrowRight', 'KeyD']
-    },
 
     /**
      * Initialize the virtual controls
+     * @param {Object} options - Configuration options
+     * @param {boolean} options.hideExisting - Hide existing joystick controls (default: true)
      */
     init: function(options = {}) {
-      this.callbacks.onStart = options.onStart || null;
-      this.callbacks.onStateChange = options.onStateChange || null;
-      
       // Detect touch capability
       this.isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
 
@@ -74,7 +82,7 @@
 
       // Only create visual controls on touch devices
       if (!this.isTouch) {
-        console.log('🎮 HubControls: Desktop detected, gamepad polling active, no virtual controls');
+        console.log('🎮 HubControls v4: Desktop mode — gamepad polling active, no virtual controls');
         this.enabled = true;
         return;
       }
@@ -91,7 +99,7 @@
       this.createActionButtons();
       
       this.enabled = true;
-      console.log('🎮 HubControls: Virtual controls initialized + gamepad polling active');
+      console.log('🎮 HubControls v4: Touch mode — virtual controls + gamepad polling active');
     },
 
     /**
@@ -121,7 +129,7 @@
     },
 
     /**
-     * Poll gamepad and update state
+     * Poll gamepad and update internal state (no side effects)
      */
     pollGamepad: function() {
       const gamepads = navigator.getGamepads();
@@ -142,7 +150,7 @@
         gp.axes[3] || 0
       ];
       
-      // Store previous state
+      // Store previous state for edge detection
       this.prevGamepadButtons = { ...this.gamepadState.buttons };
       
       // Map buttons (Xbox/standard layout)
@@ -164,81 +172,13 @@
         left: gp.buttons[14]?.pressed || false,
         right: gp.buttons[15]?.pressed || false
       };
-
-      // Simulate keyboard events for gamepad buttons (legacy compatibility)
-      this.simulateGamepadKeys();
-    },
-
-    /**
-     * Simulate keyboard events based on gamepad state
-     */
-    simulateGamepadKeys: function() {
-      const gp = this.gamepadState;
-      const prev = this.prevGamepadButtons;
-      const dz = this.deadzone;
-
-      // D-pad and stick -> Arrow keys
-      const leftNow = gp.buttons.left || gp.axes[0] < -dz;
-      const rightNow = gp.buttons.right || gp.axes[0] > dz;
-      const upNow = gp.buttons.up || gp.axes[1] < -dz;
-      const downNow = gp.buttons.down || gp.axes[1] > dz;
-
-      // Track simulated key states to avoid repeated events
-      if (!this._simKeys) this._simKeys = {};
-
-      // Helper to fire key event only on state change
-      const updateKey = (code, pressed) => {
-        if (this._simKeys[code] !== pressed) {
-          this._simKeys[code] = pressed;
-          this.simulateKey(code, pressed ? 'keydown' : 'keyup');
-        }
-      };
-
-      updateKey('ArrowLeft', leftNow);
-      updateKey('ArrowRight', rightNow);
-      updateKey('ArrowUp', upNow);
-      updateKey('ArrowDown', downNow);
-      updateKey('KeyA', leftNow);
-      updateKey('KeyD', rightNow);
-      updateKey('KeyW', upNow);
-      updateKey('KeyS', downNow);
-
-      // A button -> Confirm/Action (Space, KeyU) - NOT Enter, NOT pause
-      if (gp.buttons.a !== prev.a) {
-        this.pressKey('Space', gp.buttons.a);
-        this.pressKey('KeyU', gp.buttons.a);
-      }
-
-      // B button -> Cancel/Back (Escape, KeyI) - for backing out of menus
-      if (gp.buttons.b !== prev.b) {
-        this.pressKey('Escape', gp.buttons.b);
-        this.pressKey('KeyI', gp.buttons.b);
-      }
-
-      // Start button -> PAUSE ONLY (KeyP pulse)
-      // Single pulse, fires once on press - this is THE pause button
-      if (gp.buttons.start && !prev.start) {
-        this.simulateKey('KeyP', 'keydown');
-        setTimeout(() => this.simulateKey('KeyP', 'keyup'), 50);
-        
-        // Also fire Enter for menu confirmation (Start often confirms in pause menus)
-        this.simulateKey('Enter', 'keydown');
-        setTimeout(() => this.simulateKey('Enter', 'keyup'), 50);
-        
-        if (this.callbacks.onStart) this.callbacks.onStart();
-        console.log('🎮 Start pressed - pause (KeyP) pulse sent');
-      }
-
-      // Select button -> Tab for menu navigation/inventory
-      if (gp.buttons.select && !prev.select) {
-        this.simulateKey('Tab', 'keydown');
-        setTimeout(() => this.simulateKey('Tab', 'keyup'), 50);
-      }
+      
+      // Pure state update — no synthetic keyboard events, no callbacks
     },
 
     /**
      * Get unified input state from all sources (touch + gamepad)
-     * This is the primary API for games to use
+     * This is the PRIMARY API for games to use
      * @returns {Object} Normalized input state
      */
     getState: function() {
@@ -267,7 +207,7 @@
         if (gp.buttons.down) dirY = 1;
       }
 
-      // Clamp
+      // Clamp direction values
       dirX = Math.max(-1, Math.min(1, dirX));
       dirY = Math.max(-1, Math.min(1, dirY));
 
@@ -286,10 +226,12 @@
           lb: gp.buttons.lb,
           rb: gp.buttons.rb,
           lt: gp.buttons.lt,
-          rt: gp.buttons.rt
+          rt: gp.buttons.rt,
+          l3: gp.buttons.l3,
+          r3: gp.buttons.r3
         },
 
-        // Raw gamepad data for games that need it
+        // Raw gamepad data for games that need analog values
         gamepad: gp.connected ? {
           connected: true,
           axes: [...gp.axes],
@@ -305,19 +247,36 @@
     },
 
     /**
-     * Check if a button was just pressed (not held)
-     * Call this once per frame
+     * Check if a button was just pressed (rising edge detection)
+     * Call this once per frame per button
+     * @param {string} button - Button name: a, b, x, y, start, select, lb, rb, lt, rt
+     * @returns {boolean} True only on the frame the button was first pressed
      */
     justPressed: function(button) {
       const current = this.getState().buttons[button];
-      const prevKey = `_prev_${button}`;
+      const prevKey = '_prev_' + button;
       const prev = this[prevKey] || false;
       this[prevKey] = current;
       return current && !prev;
     },
 
     /**
+     * Check if a button was just released (falling edge detection)
+     * @param {string} button - Button name
+     * @returns {boolean} True only on the frame the button was released
+     */
+    justReleased: function(button) {
+      const current = this.getState().buttons[button];
+      const prevKey = '_prev_' + button;
+      const prev = this[prevKey] || false;
+      this[prevKey] = current;
+      return !current && prev;
+    },
+
+    /**
      * Check if a direction was just pressed
+     * @param {string} direction - Direction: up, down, left, right
+     * @returns {boolean}
      */
     justPressedDirection: function(direction) {
       const state = this.getState();
@@ -331,7 +290,7 @@
         case 'right': current = state.direction.x > dz; break;
       }
       
-      const prevKey = `_prev_dir_${direction}`;
+      const prevKey = '_prev_dir_' + direction;
       const prev = this[prevKey] || false;
       this[prevKey] = current;
       return current && !prev;
@@ -339,6 +298,7 @@
 
     /**
      * Check if gamepad is connected
+     * @returns {boolean}
      */
     hasGamepad: function() {
       return this.gamepadState.connected;
@@ -346,31 +306,15 @@
 
     /**
      * Check if device has touch capability
+     * @returns {boolean}
      */
     hasTouch: function() {
       return this.isTouch;
     },
 
-    /**
-     * Simulate a keyboard event
-     */
-    simulateKey: function(code, type) {
-      const event = new KeyboardEvent(type, {
-        code: code,
-        key: code.replace('Key', '').replace('Arrow', ''),
-        bubbles: true,
-        cancelable: true
-      });
-      document.dispatchEvent(event);
-      window.dispatchEvent(event);
-    },
-
-    /**
-     * Press/release a key
-     */
-    pressKey: function(code, pressed) {
-      this.simulateKey(code, pressed ? 'keydown' : 'keyup');
-    },
+    // ========================================
+    // UI Creation (touch controls only)
+    // ========================================
 
     hideExistingControls: function() {
       const selectors = [
@@ -384,7 +328,6 @@
         '#virtual-controls:not(#hub-virtual-controls)'
       ];
 
-      // Wait for DOM to be ready then hide
       const hideElements = () => {
         selectors.forEach(selector => {
           document.querySelectorAll(selector).forEach(el => {
@@ -398,7 +341,6 @@
       };
       
       hideElements();
-      // Also run after a delay in case elements are created dynamically
       setTimeout(hideElements, 1000);
       setTimeout(hideElements, 3000);
     },
@@ -408,123 +350,123 @@
 
       const style = document.createElement('style');
       style.id = 'hub-controls-styles';
-      style.textContent = `
-        #hub-virtual-controls {
-          position: fixed;
-          bottom: 0;
-          left: 0;
-          right: 0;
-          height: 200px;
-          pointer-events: none;
-          z-index: 99999;
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-        }
-        #hub-virtual-controls * {
-          -webkit-tap-highlight-color: transparent;
-          -webkit-touch-callout: none;
-          -webkit-user-select: none;
-          user-select: none;
-        }
-        .hub-dpad-container {
-          position: absolute;
-          left: 20px;
-          bottom: 20px;
-          width: 140px;
-          height: 140px;
-          pointer-events: auto;
-        }
-        .hub-dpad-btn {
-          position: absolute;
-          width: 50px;
-          height: 50px;
-          background: rgba(255, 255, 255, 0.15);
-          border: 2px solid rgba(255, 255, 255, 0.3);
-          border-radius: 8px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 20px;
-          color: rgba(255, 255, 255, 0.7);
-          transition: background 0.1s, transform 0.1s;
-        }
-        .hub-dpad-btn.pressed {
-          background: rgba(255, 255, 255, 0.35);
-        }
-        .hub-dpad-up { top: 0; left: 50%; transform: translateX(-50%); }
-        .hub-dpad-down { bottom: 0; left: 50%; transform: translateX(-50%); }
-        .hub-dpad-left { left: 0; top: 50%; transform: translateY(-50%); }
-        .hub-dpad-right { right: 0; top: 50%; transform: translateY(-50%); }
-        .hub-dpad-up.pressed { transform: translateX(-50%) scale(0.95); }
-        .hub-dpad-down.pressed { transform: translateX(-50%) scale(0.95); }
-        .hub-dpad-left.pressed { transform: translateY(-50%) scale(0.95); }
-        .hub-dpad-right.pressed { transform: translateY(-50%) scale(0.95); }
-        
-        .hub-start-btn {
-          position: absolute;
-          left: 50%;
-          bottom: 60px;
-          transform: translateX(-50%);
-          padding: 8px 20px;
-          background: rgba(255, 255, 255, 0.1);
-          border: 1px solid rgba(255, 255, 255, 0.25);
-          border-radius: 12px;
-          font-size: 10px;
-          font-weight: bold;
-          color: rgba(255, 255, 255, 0.5);
-          letter-spacing: 2px;
-          transition: background 0.1s, transform 0.1s;
-          pointer-events: auto;
-        }
-        .hub-start-btn.pressed {
-          background: rgba(255, 255, 255, 0.25);
-          color: rgba(255, 255, 255, 0.8);
-          transform: translateX(-50%) scale(0.95);
-        }
-        
-        .hub-action-buttons {
-          position: absolute;
-          right: 20px;
-          bottom: 20px;
-          width: 120px;
-          height: 120px;
-          pointer-events: auto;
-        }
-        .hub-action-btn {
-          position: absolute;
-          width: 55px;
-          height: 55px;
-          border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 18px;
-          font-weight: bold;
-          color: white;
-          border: 3px solid rgba(255, 255, 255, 0.4);
-          transition: transform 0.1s, filter 0.1s;
-        }
-        .hub-action-btn.pressed {
-          filter: brightness(1.3);
-        }
-        .hub-btn-a {
-          background: rgba(76, 175, 80, 0.7);
-          right: 0;
-          top: 50%;
-          transform: translateY(-50%);
-        }
-        .hub-btn-b {
-          background: rgba(244, 67, 54, 0.7);
-          bottom: 0;
-          left: 50%;
-          transform: translateX(-50%);
-        }
-        .hub-btn-a.pressed { transform: translateY(-50%) scale(0.9); }
-        .hub-btn-b.pressed { transform: translateX(-50%) scale(0.9); }
-        
-        @media (hover: hover) and (pointer: fine) {
-          #hub-virtual-controls { display: none !important; }
-        }
-      `;
+      style.textContent = '\
+        #hub-virtual-controls {\
+          position: fixed;\
+          bottom: 0;\
+          left: 0;\
+          right: 0;\
+          height: 200px;\
+          pointer-events: none;\
+          z-index: 99999;\
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;\
+        }\
+        #hub-virtual-controls * {\
+          -webkit-tap-highlight-color: transparent;\
+          -webkit-touch-callout: none;\
+          -webkit-user-select: none;\
+          user-select: none;\
+        }\
+        .hub-dpad-container {\
+          position: absolute;\
+          left: 20px;\
+          bottom: 20px;\
+          width: 140px;\
+          height: 140px;\
+          pointer-events: auto;\
+        }\
+        .hub-dpad-btn {\
+          position: absolute;\
+          width: 50px;\
+          height: 50px;\
+          background: rgba(255, 255, 255, 0.15);\
+          border: 2px solid rgba(255, 255, 255, 0.3);\
+          border-radius: 8px;\
+          display: flex;\
+          align-items: center;\
+          justify-content: center;\
+          font-size: 20px;\
+          color: rgba(255, 255, 255, 0.7);\
+          transition: background 0.1s, transform 0.1s;\
+        }\
+        .hub-dpad-btn.pressed {\
+          background: rgba(255, 255, 255, 0.35);\
+        }\
+        .hub-dpad-up { top: 0; left: 50%; transform: translateX(-50%); }\
+        .hub-dpad-down { bottom: 0; left: 50%; transform: translateX(-50%); }\
+        .hub-dpad-left { left: 0; top: 50%; transform: translateY(-50%); }\
+        .hub-dpad-right { right: 0; top: 50%; transform: translateY(-50%); }\
+        .hub-dpad-up.pressed { transform: translateX(-50%) scale(0.95); }\
+        .hub-dpad-down.pressed { transform: translateX(-50%) scale(0.95); }\
+        .hub-dpad-left.pressed { transform: translateY(-50%) scale(0.95); }\
+        .hub-dpad-right.pressed { transform: translateY(-50%) scale(0.95); }\
+        \
+        .hub-start-btn {\
+          position: absolute;\
+          left: 50%;\
+          bottom: 60px;\
+          transform: translateX(-50%);\
+          padding: 8px 20px;\
+          background: rgba(255, 255, 255, 0.1);\
+          border: 1px solid rgba(255, 255, 255, 0.25);\
+          border-radius: 12px;\
+          font-size: 10px;\
+          font-weight: bold;\
+          color: rgba(255, 255, 255, 0.5);\
+          letter-spacing: 2px;\
+          transition: background 0.1s, transform 0.1s;\
+          pointer-events: auto;\
+        }\
+        .hub-start-btn.pressed {\
+          background: rgba(255, 255, 255, 0.25);\
+          color: rgba(255, 255, 255, 0.8);\
+          transform: translateX(-50%) scale(0.95);\
+        }\
+        \
+        .hub-action-buttons {\
+          position: absolute;\
+          right: 20px;\
+          bottom: 20px;\
+          width: 120px;\
+          height: 120px;\
+          pointer-events: auto;\
+        }\
+        .hub-action-btn {\
+          position: absolute;\
+          width: 55px;\
+          height: 55px;\
+          border-radius: 50%;\
+          display: flex;\
+          align-items: center;\
+          justify-content: center;\
+          font-size: 18px;\
+          font-weight: bold;\
+          color: white;\
+          border: 3px solid rgba(255, 255, 255, 0.4);\
+          transition: transform 0.1s, filter 0.1s;\
+        }\
+        .hub-action-btn.pressed {\
+          filter: brightness(1.3);\
+        }\
+        .hub-btn-a {\
+          background: rgba(76, 175, 80, 0.7);\
+          right: 0;\
+          top: 50%;\
+          transform: translateY(-50%);\
+        }\
+        .hub-btn-b {\
+          background: rgba(244, 67, 54, 0.7);\
+          bottom: 0;\
+          left: 50%;\
+          transform: translateX(-50%);\
+        }\
+        .hub-btn-a.pressed { transform: translateY(-50%) scale(0.9); }\
+        .hub-btn-b.pressed { transform: translateX(-50%) scale(0.9); }\
+        \
+        @media (hover: hover) and (pointer: fine) {\
+          #hub-virtual-controls { display: none !important; }\
+        }\
+      ';
       document.head.appendChild(style);
     },
 
@@ -547,7 +489,7 @@
 
       directions.forEach(({ dir, symbol }) => {
         const btn = document.createElement('div');
-        btn.className = `hub-dpad-btn hub-dpad-${dir}`;
+        btn.className = 'hub-dpad-btn hub-dpad-' + dir;
         btn.textContent = symbol;
 
         btn.addEventListener('touchstart', (e) => {
@@ -555,11 +497,7 @@
           e.stopPropagation();
           this.state.dpad[dir] = true;
           btn.classList.add('pressed');
-          // Simulate Arrow key press
-          this.pressKey('Arrow' + dir.charAt(0).toUpperCase() + dir.slice(1), true);
-          // Also simulate WASD for games that use it
-          const wasdMap = { up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD' };
-          this.pressKey(wasdMap[dir], true);
+          // State update only — no synthetic keyboard events
         }, { passive: false });
 
         btn.addEventListener('touchend', (e) => {
@@ -567,19 +505,11 @@
           e.stopPropagation();
           this.state.dpad[dir] = false;
           btn.classList.remove('pressed');
-          // Release Arrow key
-          this.pressKey('Arrow' + dir.charAt(0).toUpperCase() + dir.slice(1), false);
-          // Release WASD
-          const wasdMap = { up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD' };
-          this.pressKey(wasdMap[dir], false);
         }, { passive: false });
 
         btn.addEventListener('touchcancel', () => {
           this.state.dpad[dir] = false;
           btn.classList.remove('pressed');
-          this.pressKey('Arrow' + dir.charAt(0).toUpperCase() + dir.slice(1), false);
-          const wasdMap = { up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD' };
-          this.pressKey(wasdMap[dir], false);
         });
 
         dpad.appendChild(btn);
@@ -598,6 +528,7 @@
         e.stopPropagation();
         this.state.start = true;
         btn.classList.add('pressed');
+        // State update only — games poll justPressed('start')
       }, { passive: false });
 
       btn.addEventListener('touchend', (e) => {
@@ -605,19 +536,7 @@
         e.stopPropagation();
         this.state.start = false;
         btn.classList.remove('pressed');
-        
-        // Call the onStart callback for pause functionality
-        if (this.callbacks.onStart) this.callbacks.onStart();
-        
-        // PAUSE ONLY - KeyP pulse (same as gamepad Start)
-        this.simulateKey('KeyP', 'keydown');
-        setTimeout(() => this.simulateKey('KeyP', 'keyup'), 50);
-        
-        // Also Enter for confirming in pause menus
-        this.simulateKey('Enter', 'keydown');
-        setTimeout(() => this.simulateKey('Enter', 'keyup'), 50);
-        
-        console.log('🎮 Touch Start pressed - pause (KeyP) pulse sent');
+        // No callbacks, no synthetic keys — games poll justPressed('start')
       }, { passive: false });
 
       btn.addEventListener('touchcancel', () => {
@@ -632,7 +551,7 @@
       const container = document.createElement('div');
       container.className = 'hub-action-buttons';
 
-      // A button - Confirm/Action (Space, KeyU) - NOT Enter, NOT pause
+      // A button - Primary action
       const btnA = document.createElement('div');
       btnA.className = 'hub-action-btn hub-btn-a';
       btnA.textContent = 'A';
@@ -642,9 +561,6 @@
         e.stopPropagation();
         this.state.a = true;
         btnA.classList.add('pressed');
-        // Confirm/Action keys only - NOT Enter (Enter is for Start/menus)
-        this.pressKey('Space', true);
-        this.pressKey('KeyU', true);
       }, { passive: false });
 
       btnA.addEventListener('touchend', (e) => {
@@ -652,18 +568,14 @@
         e.stopPropagation();
         this.state.a = false;
         btnA.classList.remove('pressed');
-        this.pressKey('Space', false);
-        this.pressKey('KeyU', false);
       }, { passive: false });
 
       btnA.addEventListener('touchcancel', () => {
         this.state.a = false;
         btnA.classList.remove('pressed');
-        this.pressKey('Space', false);
-        this.pressKey('KeyU', false);
       });
 
-      // B button - Cancel/Back (Escape, KeyI)
+      // B button - Secondary action / Cancel
       const btnB = document.createElement('div');
       btnB.className = 'hub-action-btn hub-btn-b';
       btnB.textContent = 'B';
@@ -673,9 +585,6 @@
         e.stopPropagation();
         this.state.b = true;
         btnB.classList.add('pressed');
-        this.pressKey('Escape', true);
-        this.pressKey('KeyI', true); // Used by some games
-        this.pressKey('Backspace', true);
       }, { passive: false });
 
       btnB.addEventListener('touchend', (e) => {
@@ -683,17 +592,11 @@
         e.stopPropagation();
         this.state.b = false;
         btnB.classList.remove('pressed');
-        this.pressKey('Escape', false);
-        this.pressKey('KeyI', false);
-        this.pressKey('Backspace', false);
       }, { passive: false });
 
       btnB.addEventListener('touchcancel', () => {
         this.state.b = false;
         btnB.classList.remove('pressed');
-        this.pressKey('Escape', false);
-        this.pressKey('KeyI', false);
-        this.pressKey('Backspace', false);
       });
 
       container.appendChild(btnA);
@@ -701,9 +604,9 @@
       this.container.appendChild(container);
     },
 
-    getState: function() {
-      return { ...this.state };
-    },
+    // ========================================
+    // Visibility control
+    // ========================================
 
     show: function() {
       if (this.container) {
