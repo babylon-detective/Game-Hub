@@ -40,8 +40,10 @@ export class HubPhaserAdapter {
     this.options = {
       disableNativeTouch: true,
       keyMapping: {
-        confirm: ['SPACE', 'U'],
-        cancel: ['ESC', 'I', 'BACKSPACE'],
+        confirm: ['J'],           // J = Confirm (A button)
+        cancel: ['K'],            // K = Cancel (B button)
+        start: ['I'],             // I = Start / Pause
+        select: ['L'],            // L = Select / Menu
         up: ['W', 'UP'],
         down: ['S', 'DOWN'],
         left: ['A', 'LEFT'],

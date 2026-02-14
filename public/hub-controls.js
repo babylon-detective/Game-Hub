@@ -43,7 +43,9 @@
       dpad: { up: false, down: false, left: false, right: false },
       a: false,
       b: false,
-      start: false
+      start: false,
+      select: false,
+      lb: false
     },
     
     // Internal gamepad state
@@ -95,8 +97,9 @@
       this.createStyles();
       this.createContainer();
       this.createDpad();
-      this.createStartButton();
+      this.createCenterButtons();
       this.createActionButtons();
+      this.createShoulderButtons();
       
       this.enabled = true;
       console.log('🎮 HubControls v4: Touch mode — virtual controls + gamepad polling active');
@@ -222,8 +225,8 @@
           x: gp.buttons.x,
           y: gp.buttons.y,
           start: touch.start || gp.buttons.start,
-          select: gp.buttons.select,
-          lb: gp.buttons.lb,
+          select: touch.select || gp.buttons.select,
+          lb: touch.lb || gp.buttons.lb,
           rb: gp.buttons.rb,
           lt: gp.buttons.lt,
           rt: gp.buttons.rt,
@@ -401,7 +404,53 @@
         .hub-dpad-left.pressed { transform: translateY(-50%) scale(0.95); }\
         .hub-dpad-right.pressed { transform: translateY(-50%) scale(0.95); }\
         \
+        .hub-center-buttons {\
+          position: absolute;\
+          left: 50%;\
+          bottom: 50px;\
+          transform: translateX(-50%);\
+          display: flex;\
+          gap: 12px;\
+          pointer-events: auto;\
+        }\
+        .hub-center-btn {\
+          padding: 8px 16px;\
+          background: rgba(255, 255, 255, 0.1);\
+          border: 1px solid rgba(255, 255, 255, 0.25);\
+          border-radius: 12px;\
+          font-size: 10px;\
+          font-weight: bold;\
+          color: rgba(255, 255, 255, 0.5);\
+          letter-spacing: 2px;\
+          transition: background 0.1s, transform 0.1s;\
+        }\
+        .hub-center-btn.pressed {\
+          background: rgba(255, 255, 255, 0.25);\
+          color: rgba(255, 255, 255, 0.8);\
+          transform: scale(0.95);\
+        }\
+        .hub-shoulder-btn {\
+          position: absolute;\
+          top: 0;\
+          padding: 10px 18px;\
+          background: rgba(255, 255, 255, 0.08);\
+          border: 1px solid rgba(255, 255, 255, 0.2);\
+          border-radius: 0 0 10px 10px;\
+          font-size: 10px;\
+          font-weight: bold;\
+          color: rgba(255, 255, 255, 0.45);\
+          letter-spacing: 1px;\
+          transition: background 0.1s, transform 0.1s;\
+          pointer-events: auto;\
+        }\
+        .hub-shoulder-btn.pressed {\
+          background: rgba(255, 255, 255, 0.25);\
+          color: rgba(255, 255, 255, 0.8);\
+        }\
+        .hub-btn-lb { left: 20px; }\
+        \
         .hub-start-btn {\
+          display: none;\
           position: absolute;\
           left: 50%;\
           bottom: 60px;\
@@ -518,86 +567,76 @@
       this.container.appendChild(dpad);
     },
 
-    createStartButton: function() {
-      const btn = document.createElement('div');
-      btn.className = 'hub-start-btn';
-      btn.textContent = 'START';
+    createCenterButtons: function() {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'hub-center-buttons';
 
-      btn.addEventListener('touchstart', (e) => {
+      // Select button (L = menu)
+      const btnSelect = document.createElement('div');
+      btnSelect.className = 'hub-center-btn';
+      btnSelect.textContent = 'SELECT';
+      this._addTouchButton(btnSelect, 'select');
+      wrapper.appendChild(btnSelect);
+
+      // Start button (I = pause)
+      const btnStart = document.createElement('div');
+      btnStart.className = 'hub-center-btn';
+      btnStart.textContent = 'START';
+      this._addTouchButton(btnStart, 'start');
+      wrapper.appendChild(btnStart);
+
+      this.container.appendChild(wrapper);
+
+      // Keep the old standalone start button hidden but still in DOM
+      // (in case external code references .hub-start-btn)
+    },
+
+    createShoulderButtons: function() {
+      // LB = Shift / Dash / Sprint
+      const lb = document.createElement('div');
+      lb.className = 'hub-shoulder-btn hub-btn-lb';
+      lb.textContent = 'LB';
+      this._addTouchButton(lb, 'lb');
+      this.container.appendChild(lb);
+    },
+
+    /** Internal helper — wire touch events for a simple boolean button */
+    _addTouchButton: function(el, stateKey) {
+      el.addEventListener('touchstart', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        this.state.start = true;
-        btn.classList.add('pressed');
-        // State update only — games poll justPressed('start')
+        this.state[stateKey] = true;
+        el.classList.add('pressed');
       }, { passive: false });
 
-      btn.addEventListener('touchend', (e) => {
+      el.addEventListener('touchend', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        this.state.start = false;
-        btn.classList.remove('pressed');
-        // No callbacks, no synthetic keys — games poll justPressed('start')
+        this.state[stateKey] = false;
+        el.classList.remove('pressed');
       }, { passive: false });
 
-      btn.addEventListener('touchcancel', () => {
-        this.state.start = false;
-        btn.classList.remove('pressed');
+      el.addEventListener('touchcancel', () => {
+        this.state[stateKey] = false;
+        el.classList.remove('pressed');
       });
-
-      this.container.appendChild(btn);
     },
 
     createActionButtons: function() {
       const container = document.createElement('div');
       container.className = 'hub-action-buttons';
 
-      // A button - Primary action
+      // A button - Primary action (J = confirm)
       const btnA = document.createElement('div');
       btnA.className = 'hub-action-btn hub-btn-a';
       btnA.textContent = 'A';
+      this._addTouchButton(btnA, 'a');
 
-      btnA.addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        this.state.a = true;
-        btnA.classList.add('pressed');
-      }, { passive: false });
-
-      btnA.addEventListener('touchend', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        this.state.a = false;
-        btnA.classList.remove('pressed');
-      }, { passive: false });
-
-      btnA.addEventListener('touchcancel', () => {
-        this.state.a = false;
-        btnA.classList.remove('pressed');
-      });
-
-      // B button - Secondary action / Cancel
+      // B button - Secondary action / Cancel (K = cancel)
       const btnB = document.createElement('div');
       btnB.className = 'hub-action-btn hub-btn-b';
       btnB.textContent = 'B';
-
-      btnB.addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        this.state.b = true;
-        btnB.classList.add('pressed');
-      }, { passive: false });
-
-      btnB.addEventListener('touchend', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        this.state.b = false;
-        btnB.classList.remove('pressed');
-      }, { passive: false });
-
-      btnB.addEventListener('touchcancel', () => {
-        this.state.b = false;
-        btnB.classList.remove('pressed');
-      });
+      this._addTouchButton(btnB, 'b');
 
       container.appendChild(btnA);
       container.appendChild(btnB);
